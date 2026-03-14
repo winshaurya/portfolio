@@ -278,7 +278,7 @@ const NavBar = () => {
 };
 
 const Hero = () => {
-  const videoRef = useRef<HTMLVideoElement>(null);
+const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   useHlsVideo(videoRef, 'https://stream.mux.com/Aa02T7oM1wH5Mk5EEVDYhbZ1ChcdhRsS2m1NYyx4Ua1g.m3u8');
 
@@ -1157,7 +1157,7 @@ const Stats = () => {
 };
 
 const Footer = () => {
-  const videoRef = useRef<HTMLVideoElement>(null);
+const videoRef = useRef<HTMLVideoElement>(null);
   useHlsVideo(videoRef, 'https://stream.mux.com/Aa02T7oM1wH5Mk5EEVDYhbZ1ChcdhRsS2m1NYyx4Ua1g.m3u8');
 
   return (
@@ -1241,8 +1241,6 @@ export default function App() {
 
   return (
     <>
-      <style>{globalStyles}</style>
-      
       <AnimatePresence>
         {loading && <LoadingScreen onComplete={() => setLoading(false)} />}
       </AnimatePresence>
