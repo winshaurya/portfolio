@@ -73,6 +73,13 @@ const globalStyles = `
   .animate-scroll { animation: scroll 30s linear infinite; }
   .animate-scroll-reverse { animation: scroll-reverse 30s linear infinite; }
 
+  @keyframes pan {
+    0% { transform: scale(1.02) translateX(0); }
+    50% { transform: scale(1.05) translateX(-2%); }
+    100% { transform: scale(1.02) translateX(0); }
+  }
+  .bg-animate { animation: pan 20s ease-in-out infinite; transform-origin: center center; }
+
   /* Smooth scroll for html */
   html { scroll-behavior: smooth; }
 
