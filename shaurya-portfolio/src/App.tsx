@@ -94,39 +94,181 @@ const globalStyles = `
 
 // --- HOOKS ---
 
-// Hook to dynamically load and manage HLS video
-const useHlsVideo = (videoRef: React.RefObject<HTMLVideoElement>, src: string) => {
+// Hook to dynamically load and manage HLS video with warm-cache and quality switching
+const useHlsVideo = (
+  videoRef: React.RefObject<HTMLVideoElement>,
+  src: string,
+  opts: { prefetch?: boolean; startLowThenHigh?: boolean } = { prefetch: true, startLowThenHigh: true }
+) => {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    const loadVideo = async () => {
-      // @ts-ignore
-      if (window.Hls && window.Hls.isSupported()) {
-        // @ts-ignore
-        const hls = new window.Hls();
-        hls.loadSource(src);
-        hls.attachMedia(video);
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = src;
-      } else {
-        // Dynamic load of hls.js script if not available
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
-        script.async = true;
-        script.onload = () => {
-          // @ts-ignore
-          if (window.Hls.isSupported()) {
-             // @ts-ignore
-            const hls = new window.Hls();
-            hls.loadSource(src);
-            hls.attachMedia(video);
+    let hlsInstance: any = null;
+    let scriptEl: HTMLScriptElement | null = null;
+    const cacheName = 'hls-video-cache-v1';
+
+    const parseManifestForUrls = (baseUrl: string, manifestText: string) => {
+      const lines = manifestText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      const urls: string[] = [];
+      for (const line of lines) {
+        if (!line.startsWith('#')) {
+          try {
+            const u = new URL(line, baseUrl).toString();
+            urls.push(u);
+          } catch (e) {
+            // ignore malformed lines
           }
-        };
-        document.body.appendChild(script);
+        }
+      }
+      return urls;
+    };
+
+    const warmCache = async () => {
+      if (!opts.prefetch) return;
+      try {
+        if ('caches' in window) {
+          const cache = await caches.open(cacheName);
+          const resp = await fetch(src, { credentials: 'include' });
+          if (resp && resp.ok) {
+            await cache.put(src, resp.clone());
+            const txt = await resp.text();
+            const urls = parseManifestForUrls(src, txt);
+            // cache up to first 3 referenced playlists/segments
+            for (let i = 0; i < Math.min(3, urls.length); i++) {
+              try {
+                const r = await fetch(urls[i], { credentials: 'include' });
+                if (r && r.ok) await cache.put(urls[i], r.clone());
+              } catch (e) {
+                // ignore individual fetch errors
+              }
+            }
+          }
+        } else {
+          // best-effort fetch to warm browser HTTP cache
+          await fetch(src, { credentials: 'include' });
+        }
+      } catch (e) {
+        // non-fatal
+        // eslint-disable-next-line no-console
+        console.warn('HLS prefetch failed', e);
       }
     };
-    loadVideo();
+
+    const loadHlsScript = () =>
+      new Promise<void>((resolve) => {
+        // @ts-ignore
+        if (window.Hls && window.Hls.isSupported && window.Hls.isSupported()) return resolve();
+
+        const existing = document.querySelector('script[data-hlsjs-src]');
+        if (existing) {
+          existing.addEventListener('load', () => resolve());
+          // if already present and Hls available, resolve now
+          // @ts-ignore
+          if ((window as any).Hls) return resolve();
+          return;
+        }
+
+        scriptEl = document.createElement('script');
+        scriptEl.setAttribute('data-hlsjs-src', '1');
+        scriptEl.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
+        scriptEl.async = true;
+        scriptEl.onload = () => resolve();
+        scriptEl.onerror = () => resolve();
+        document.body.appendChild(scriptEl);
+      });
+
+    const init = async () => {
+      // Warm the HTTP cache as soon as possible
+      warmCache();
+      await loadHlsScript();
+
+      const v = video;
+      // prefer hls.js when available
+      // @ts-ignore
+      if (window.Hls && window.Hls.isSupported && window.Hls.isSupported()) {
+        // @ts-ignore
+        const Hls = window.Hls;
+        hlsInstance = new Hls({
+          maxBufferLength: 30,
+          capLevelToPlayerSize: true,
+          maxMaxBufferLength: 60,
+        });
+
+        // start low for fast startup
+        if (typeof hlsInstance.startLevel !== 'undefined') hlsInstance.startLevel = 0;
+
+        hlsInstance.attachMedia(v);
+        hlsInstance.loadSource(src);
+
+        // on manifest parsed ensure starting level is low
+        // @ts-ignore
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+          try {
+            const levels = hlsInstance.levels || [];
+            if (levels.length && opts.startLowThenHigh) {
+              hlsInstance.currentLevel = 0; // force low-res start
+            }
+          } catch (e) {}
+        });
+
+        const switchToBest = () => {
+          try {
+            const levels = hlsInstance.levels || [];
+            if (!levels.length) return;
+            // choose the best level by resolution/bitrate heuristic
+            let bestIdx = 0;
+            let bestScore = -1;
+            for (let i = 0; i < levels.length; i++) {
+              const lvl = levels[i];
+              const score = (lvl.width || 0) + ((lvl.bitrate || 0) / 1000000);
+              if (score > bestScore) {
+                bestScore = score;
+                bestIdx = i;
+              }
+            }
+            hlsInstance.currentLevel = bestIdx;
+          } catch (e) {}
+        };
+
+        const onPlaying = () => setTimeout(switchToBest, 1200);
+        v.addEventListener('playing', onPlaying);
+        const fallbackTimer = window.setTimeout(switchToBest, 3000);
+
+        // attach cleanup handle on element so it can be removed later
+        (v as any).__hlsCleanup = () => {
+          v.removeEventListener('playing', onPlaying);
+          window.clearTimeout(fallbackTimer);
+          try {
+            // @ts-ignore
+            hlsInstance?.destroy?.();
+          } catch (e) {}
+          hlsInstance = null;
+        };
+      } else {
+        // native HLS (Safari)
+        v.src = src;
+      }
+
+      // make a best-effort autoplay attempt
+      try {
+        v.preload = 'auto';
+        v.muted = true;
+        const p = v.play();
+        if (p && p.catch) p.catch(() => {});
+      } catch (e) {}
+    };
+
+    init();
+
+    return () => {
+      const v = videoRef.current;
+      if (v) {
+        const cleanup = (v as any).__hlsCleanup;
+        if (typeof cleanup === 'function') cleanup();
+      }
+      if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
+    };
   }, [src, videoRef]);
 };
 
