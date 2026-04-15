@@ -94,7 +94,7 @@ const globalStyles = `
 
 // --- HOOKS ---
 
-// Hook to dynamically load and manage HLS video with warm-cache and quality switching
+// Hook to dynamically load and manage HLS video with warm-cache, quality switching and recovery
 const useHlsVideo = (
   videoRef: React.RefObject<HTMLVideoElement>,
   src: string,
@@ -106,7 +106,13 @@ const useHlsVideo = (
 
     let hlsInstance: any = null;
     let scriptEl: HTMLScriptElement | null = null;
+    let scriptAddedByUs = false;
     const cacheName = 'hls-video-cache-v1';
+    let reconnectAttempts = 0;
+    const maxReconnect = 4;
+    let fallbackTimer: number | null = null;
+    let keepAliveInterval: number | null = null;
+    let destroyRequested = false;
 
     const parseManifestForUrls = (baseUrl: string, manifestText: string) => {
       const lines = manifestText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -134,7 +140,6 @@ const useHlsVideo = (
             await cache.put(src, resp.clone());
             const txt = await resp.text();
             const urls = parseManifestForUrls(src, txt);
-            // cache up to first 3 referenced playlists/segments
             for (let i = 0; i < Math.min(3, urls.length); i++) {
               try {
                 const r = await fetch(urls[i], { credentials: 'include' });
@@ -145,7 +150,6 @@ const useHlsVideo = (
             }
           }
         } else {
-          // best-effort fetch to warm browser HTTP cache
           await fetch(src, { credentials: 'include' });
         }
       } catch (e) {
@@ -157,8 +161,9 @@ const useHlsVideo = (
 
     const loadHlsScript = () =>
       new Promise<void>((resolve) => {
+        // already available
         // @ts-ignore
-        if (window.Hls && window.Hls.isSupported && window.Hls.isSupported()) return resolve();
+        if ((window as any).Hls && (window as any).Hls.isSupported && (window as any).Hls.isSupported()) return resolve();
 
         const existing = document.querySelector('script[data-hlsjs-src]');
         if (existing) {
@@ -176,47 +181,90 @@ const useHlsVideo = (
         scriptEl.onload = () => resolve();
         scriptEl.onerror = () => resolve();
         document.body.appendChild(scriptEl);
+        scriptAddedByUs = true;
       });
 
-    const init = async () => {
-      // Warm the HTTP cache as soon as possible
-      warmCache();
+    const tryPlay = async () => {
+      try {
+        if (video.paused) await video.play();
+      } catch (e) {
+        // ignore autoplay errors (browsers may block)
+      }
+    };
+
+    const destroyHls = () => {
+      try {
+        hlsInstance?.destroy?.();
+      } catch (e) {}
+      hlsInstance = null;
+    };
+
+    const initHls = async () => {
+      if (destroyRequested) return;
       await loadHlsScript();
 
       const v = video;
-      // prefer hls.js when available
       // @ts-ignore
-      if (window.Hls && window.Hls.isSupported && window.Hls.isSupported()) {
+      if ((window as any).Hls && (window as any).Hls.isSupported && (window as any).Hls.isSupported()) {
         // @ts-ignore
-        const Hls = window.Hls;
-        hlsInstance = new Hls({
-          maxBufferLength: 30,
-          capLevelToPlayerSize: true,
-          maxMaxBufferLength: 60,
-        });
+        const Hls = (window as any).Hls;
 
-        // start low for fast startup
+        destroyHls();
+        // create a fresh instance
+        hlsInstance = new Hls({ maxBufferLength: 30, capLevelToPlayerSize: true, maxMaxBufferLength: 60 });
         if (typeof hlsInstance.startLevel !== 'undefined') hlsInstance.startLevel = 0;
 
-        hlsInstance.attachMedia(v);
-        hlsInstance.loadSource(src);
-
-        // on manifest parsed ensure starting level is low
-        // @ts-ignore
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
           try {
             const levels = hlsInstance.levels || [];
-            if (levels.length && opts.startLowThenHigh) {
-              hlsInstance.currentLevel = 0; // force low-res start
+            if (levels.length && opts.startLowThenHigh) hlsInstance.currentLevel = 0;
+          } catch (e) {}
+        });
+
+        // error handling and recovery
+        hlsInstance.on(Hls.Events.ERROR, (_evt: any, data: any) => {
+          try {
+            const { type, details, fatal } = data || {};
+            // eslint-disable-next-line no-console
+            console.warn('HLS error', type, details, fatal);
+            if (!fatal) return;
+
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              try {
+                hlsInstance.recoverMediaError();
+                return;
+              } catch (e) {
+                destroyHls();
+              }
+            }
+
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+              try {
+                hlsInstance.startLoad();
+                return;
+              } catch (e) {
+                destroyHls();
+              }
+            }
+
+            // fatal: try to re-init a few times
+            destroyHls();
+            if (reconnectAttempts < maxReconnect) {
+              reconnectAttempts += 1;
+              setTimeout(() => {
+                if (!destroyRequested) initHls();
+              }, 1500);
             }
           } catch (e) {}
         });
+
+        hlsInstance.attachMedia(v);
+        hlsInstance.loadSource(src);
 
         const switchToBest = () => {
           try {
             const levels = hlsInstance.levels || [];
             if (!levels.length) return;
-            // choose the best level by resolution/bitrate heuristic
             let bestIdx = 0;
             let bestScore = -1;
             for (let i = 0; i < levels.length; i++) {
@@ -233,41 +281,68 @@ const useHlsVideo = (
 
         const onPlaying = () => setTimeout(switchToBest, 1200);
         v.addEventListener('playing', onPlaying);
-        const fallbackTimer = window.setTimeout(switchToBest, 3000);
+        if (fallbackTimer) window.clearTimeout(fallbackTimer);
+        fallbackTimer = window.setTimeout(switchToBest, 3000);
 
-        // attach cleanup handle on element so it can be removed later
+        const onEnded = () => {
+          try {
+            v.currentTime = 0;
+            tryPlay();
+          } catch (e) {}
+        };
+        v.addEventListener('ended', onEnded);
+
+        const onStalled = () => {
+          tryPlay();
+          try {
+            hlsInstance?.startLoad?.();
+          } catch (e) {}
+        };
+        v.addEventListener('stalled', onStalled);
+        v.addEventListener('waiting', onStalled);
+
+        const onPauseTry = () => setTimeout(() => { if (v.paused) tryPlay(); }, 500);
+        v.addEventListener('pause', onPauseTry);
+
+        keepAliveInterval = window.setInterval(() => {
+          if (v.paused) tryPlay();
+        }, 2000);
+
         (v as any).__hlsCleanup = () => {
           v.removeEventListener('playing', onPlaying);
-          window.clearTimeout(fallbackTimer);
-          try {
-            // @ts-ignore
-            hlsInstance?.destroy?.();
-          } catch (e) {}
-          hlsInstance = null;
+          v.removeEventListener('ended', onEnded);
+          v.removeEventListener('stalled', onStalled);
+          v.removeEventListener('waiting', onStalled);
+          v.removeEventListener('pause', onPauseTry);
+          if (fallbackTimer) { window.clearTimeout(fallbackTimer); fallbackTimer = null; }
+          if (keepAliveInterval) { window.clearInterval(keepAliveInterval); keepAliveInterval = null; }
+          destroyHls();
         };
       } else {
-        // native HLS (Safari)
+        // native HLS fallback (Safari)
         v.src = src;
       }
 
-      // make a best-effort autoplay attempt
+      // best-effort autoplay
       try {
         v.preload = 'auto';
         v.muted = true;
-        const p = v.play();
-        if (p && p.catch) p.catch(() => {});
+        tryPlay();
       } catch (e) {}
     };
 
-    init();
+    // start warming cache and init
+    warmCache();
+    initHls();
 
     return () => {
+      destroyRequested = true;
       const v = videoRef.current;
       if (v) {
         const cleanup = (v as any).__hlsCleanup;
         if (typeof cleanup === 'function') cleanup();
       }
-      if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
+      // intentionally keep global hls.js script in DOM for other instances
     };
   }, [src, videoRef]);
 };
