@@ -211,13 +211,18 @@ const useHlsVideo = (
 
         destroyHls();
         // create a fresh instance
-        hlsInstance = new Hls({ maxBufferLength: 30, capLevelToPlayerSize: true, maxMaxBufferLength: 60 });
+          hlsInstance = new Hls({ maxBufferLength: 30, capLevelToPlayerSize: false, maxMaxBufferLength: 60 });
         if (typeof hlsInstance.startLevel !== 'undefined') hlsInstance.startLevel = 0;
 
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
           try {
             const levels = hlsInstance.levels || [];
-            if (levels.length && opts.startLowThenHigh) hlsInstance.currentLevel = 0;
+              if (levels.length) {
+                // Force highest-quality level for an HD background
+                const highest = levels.length - 1;
+                hlsInstance.currentLevel = highest;
+                hlsInstance.autoLevelEnabled = false;
+              }
           } catch (e) {}
         });
 
@@ -527,7 +532,7 @@ const Hero = () => {
           autoPlay muted loop playsInline
           className="min-w-full min-h-full object-cover absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
         />
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+        <div className="absolute inset-0 bg-black/10" />
         <div className="absolute bottom-0 w-full h-48 bg-gradient-to-t from-bg to-transparent" />
       </div>
 
@@ -1579,7 +1584,7 @@ const Footer = () => {
           autoPlay muted loop playsInline
           className="min-w-full min-h-full object-cover absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 grayscale"
         />
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-[1px]" />
+        <div className="absolute inset-0 bg-black/30" />
       </div>
       
       <div className="absolute top-0 w-full h-32 bg-gradient-to-b from-bg to-transparent z-10" />
