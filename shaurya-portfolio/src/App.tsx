@@ -94,261 +94,39 @@ const globalStyles = `
 
 // --- HOOKS ---
 
-// Hook to dynamically load and manage HLS video with warm-cache, quality switching and recovery
-const useHlsVideo = (
-  videoRef: React.RefObject<HTMLVideoElement>,
-  src: string,
-  opts: { prefetch?: boolean; startLowThenHigh?: boolean } = { prefetch: true, startLowThenHigh: true }
-) => {
+// Hook to dynamically load and manage HLS video
+const useHlsVideo = (videoRef: React.RefObject<HTMLVideoElement>, src: string) => {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    let hlsInstance: any = null;
-    let scriptEl: HTMLScriptElement | null = null;
-    let scriptAddedByUs = false;
-    const cacheName = 'hls-video-cache-v1';
-    let reconnectAttempts = 0;
-    const maxReconnect = 4;
-    let fallbackTimer: number | null = null;
-    let keepAliveInterval: number | null = null;
-    let destroyRequested = false;
-
-    const parseManifestForUrls = (baseUrl: string, manifestText: string) => {
-      const lines = manifestText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-      const urls: string[] = [];
-      for (const line of lines) {
-        if (!line.startsWith('#')) {
-          try {
-            const u = new URL(line, baseUrl).toString();
-            urls.push(u);
-          } catch (e) {
-            // ignore malformed lines
-          }
-        }
-      }
-      return urls;
-    };
-
-    const warmCache = async () => {
-      if (!opts.prefetch) return;
-      try {
-        if ('caches' in window) {
-          const cache = await caches.open(cacheName);
-          const resp = await fetch(src, { credentials: 'include' });
-          if (resp && resp.ok) {
-            await cache.put(src, resp.clone());
-            const txt = await resp.text();
-            const urls = parseManifestForUrls(src, txt);
-            for (let i = 0; i < Math.min(3, urls.length); i++) {
-              try {
-                const r = await fetch(urls[i], { credentials: 'include' });
-                if (r && r.ok) await cache.put(urls[i], r.clone());
-              } catch (e) {
-                // ignore individual fetch errors
-              }
-            }
-          }
-        } else {
-          await fetch(src, { credentials: 'include' });
-        }
-      } catch (e) {
-        // non-fatal
-        // eslint-disable-next-line no-console
-        console.warn('HLS prefetch failed', e);
-      }
-    };
-
-    const loadHlsScript = () =>
-      new Promise<void>((resolve) => {
-        // already available
-        // @ts-ignore
-        if ((window as any).Hls && (window as any).Hls.isSupported && (window as any).Hls.isSupported()) return resolve();
-
-        const existing = document.querySelector('script[data-hlsjs-src]');
-        if (existing) {
-          existing.addEventListener('load', () => resolve());
-          // if already present and Hls available, resolve now
-          // @ts-ignore
-          if ((window as any).Hls) return resolve();
-          return;
-        }
-
-        scriptEl = document.createElement('script');
-        scriptEl.setAttribute('data-hlsjs-src', '1');
-        scriptEl.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
-        scriptEl.async = true;
-        scriptEl.onload = () => resolve();
-        scriptEl.onerror = () => resolve();
-        document.body.appendChild(scriptEl);
-        scriptAddedByUs = true;
-      });
-
-    const tryPlay = async () => {
-      try {
-        if (video.paused) await video.play();
-      } catch (e) {
-        // ignore autoplay errors (browsers may block)
-      }
-    };
-
-    const destroyHls = () => {
-      try {
-        hlsInstance?.destroy?.();
-      } catch (e) {}
-      hlsInstance = null;
-    };
-
-    const initHls = async () => {
-      if (destroyRequested) return;
-      await loadHlsScript();
-
-      const v = video;
+    const loadVideo = async () => {
       // @ts-ignore
-      if ((window as any).Hls && (window as any).Hls.isSupported && (window as any).Hls.isSupported()) {
+      if (window.Hls && window.Hls.isSupported()) {
         // @ts-ignore
-        const Hls = (window as any).Hls;
-
-        destroyHls();
-        // create a fresh instance
-          hlsInstance = new Hls({ maxBufferLength: 30, capLevelToPlayerSize: false, maxMaxBufferLength: 60 });
-        if (typeof hlsInstance.startLevel !== 'undefined') hlsInstance.startLevel = 0;
-
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-          try {
-            const levels = hlsInstance.levels || [];
-              if (levels.length) {
-                // Force highest-quality level for an HD background
-                const highest = levels.length - 1;
-                hlsInstance.currentLevel = highest;
-                hlsInstance.autoLevelEnabled = false;
-              }
-          } catch (e) {}
-        });
-
-        // error handling and recovery
-        hlsInstance.on(Hls.Events.ERROR, (_evt: any, data: any) => {
-          try {
-            const { type, details, fatal } = data || {};
-            // eslint-disable-next-line no-console
-            console.warn('HLS error', type, details, fatal);
-            if (!fatal) return;
-
-            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-              try {
-                hlsInstance.recoverMediaError();
-                return;
-              } catch (e) {
-                destroyHls();
-              }
-            }
-
-            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-              try {
-                hlsInstance.startLoad();
-                return;
-              } catch (e) {
-                destroyHls();
-              }
-            }
-
-            // fatal: try to re-init a few times
-            destroyHls();
-            if (reconnectAttempts < maxReconnect) {
-              reconnectAttempts += 1;
-              setTimeout(() => {
-                if (!destroyRequested) initHls();
-              }, 1500);
-            }
-          } catch (e) {}
-        });
-
-        hlsInstance.attachMedia(v);
-        hlsInstance.loadSource(src);
-
-        const switchToBest = () => {
-          try {
-            const levels = hlsInstance.levels || [];
-            if (!levels.length) return;
-            let bestIdx = 0;
-            let bestScore = -1;
-            for (let i = 0; i < levels.length; i++) {
-              const lvl = levels[i];
-              const score = (lvl.width || 0) + ((lvl.bitrate || 0) / 1000000);
-              if (score > bestScore) {
-                bestScore = score;
-                bestIdx = i;
-              }
-            }
-            hlsInstance.currentLevel = bestIdx;
-          } catch (e) {}
-        };
-
-        const onPlaying = () => setTimeout(switchToBest, 1200);
-        v.addEventListener('playing', onPlaying);
-        if (fallbackTimer) window.clearTimeout(fallbackTimer);
-        fallbackTimer = window.setTimeout(switchToBest, 3000);
-
-        const onEnded = () => {
-          try {
-            v.currentTime = 0;
-            tryPlay();
-          } catch (e) {}
-        };
-        v.addEventListener('ended', onEnded);
-
-        const onStalled = () => {
-          tryPlay();
-          try {
-            hlsInstance?.startLoad?.();
-          } catch (e) {}
-        };
-        v.addEventListener('stalled', onStalled);
-        v.addEventListener('waiting', onStalled);
-
-        const onPauseTry = () => setTimeout(() => { if (v.paused) tryPlay(); }, 500);
-        v.addEventListener('pause', onPauseTry);
-
-        keepAliveInterval = window.setInterval(() => {
-          if (v.paused) tryPlay();
-        }, 2000);
-
-        (v as any).__hlsCleanup = () => {
-          v.removeEventListener('playing', onPlaying);
-          v.removeEventListener('ended', onEnded);
-          v.removeEventListener('stalled', onStalled);
-          v.removeEventListener('waiting', onStalled);
-          v.removeEventListener('pause', onPauseTry);
-          if (fallbackTimer) { window.clearTimeout(fallbackTimer); fallbackTimer = null; }
-          if (keepAliveInterval) { window.clearInterval(keepAliveInterval); keepAliveInterval = null; }
-          destroyHls();
-        };
+        const hls = new window.Hls();
+        hls.loadSource(src);
+        hls.attachMedia(video);
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = src;
       } else {
-        // native HLS fallback (Safari)
-        v.src = src;
+        // Dynamic load of hls.js script if not available
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
+        script.async = true;
+        script.onload = () => {
+          // @ts-ignore
+          if (window.Hls.isSupported()) {
+             // @ts-ignore
+            const hls = new window.Hls();
+            hls.loadSource(src);
+            hls.attachMedia(video);
+          }
+        };
+        document.body.appendChild(script);
       }
-
-      // best-effort autoplay
-      try {
-        v.preload = 'auto';
-        v.muted = true;
-        tryPlay();
-      } catch (e) {}
     };
-
-    // start warming cache and init
-    warmCache();
-    initHls();
-
-    return () => {
-      destroyRequested = true;
-      const v = videoRef.current;
-      if (v) {
-        const cleanup = (v as any).__hlsCleanup;
-        if (typeof cleanup === 'function') cleanup();
-      }
-      // intentionally keep global hls.js script in DOM for other instances
-    };
+    loadVideo();
   }, [src, videoRef]);
 };
 
@@ -532,7 +310,7 @@ const Hero = () => {
           autoPlay muted loop playsInline
           className="min-w-full min-h-full object-cover absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
         />
-        <div className="absolute inset-0 bg-black/10" />
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
         <div className="absolute bottom-0 w-full h-48 bg-gradient-to-t from-bg to-transparent" />
       </div>
 
@@ -1584,7 +1362,7 @@ const Footer = () => {
           autoPlay muted loop playsInline
           className="min-w-full min-h-full object-cover absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 grayscale"
         />
-        <div className="absolute inset-0 bg-black/30" />
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-[1px]" />
       </div>
       
       <div className="absolute top-0 w-full h-32 bg-gradient-to-b from-bg to-transparent z-10" />
