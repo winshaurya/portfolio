@@ -338,7 +338,24 @@ export const NavBar = () => {
 export const Hero = ({ subtitle = "Collection '26", roleLabels }: { subtitle?: string; roleLabels?: string[] }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  useHlsVideo(videoRef, { mp4: 'https://cdn.pixabay.com/video/2025/10/09/308800_large.mp4' });
+  // Force the provided MP4 as the background source to avoid HLS/CORS fallbacks
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const src = 'https://cdn.pixabay.com/video/2025/10/09/308800_large.mp4';
+    try {
+      v.pause();
+      v.removeAttribute('src');
+      v.src = src;
+      v.load();
+      v.muted = true;
+      v.playsInline = true;
+      v.autoplay = true;
+      v.loop = true;
+      const p = v.play();
+      if (p && p.catch) p.catch(() => {});
+    } catch (e) {}
+  }, [videoRef]);
 
   const [roleIndex, setRoleIndex] = useState(0);
   const roles = roleLabels && roleLabels.length > 0 ? roleLabels : ["Developer", "ML Enthusiast", "Problem Solver", "Student"];
