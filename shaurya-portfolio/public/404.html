@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Not Found</title>
+    <script>
+      // SPA GitHub Pages fallback: fetch the root index and render it,
+      // then restore the original path so the client router can handle it.
+      (function () {
+        var path = location.pathname + location.search + location.hash;
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/', true);
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState === 4) {
+            if (xhr.status >= 200 && xhr.status < 400) {
+              var doc = document.open('text/html', 'replace');
+              doc.write(xhr.responseText);
+              doc.close();
+              try { history.replaceState({}, '', path); } catch (e) {}
+            } else {
+              // If fetching index fails, at least redirect to root.
+              window.location.replace('/');
+            }
+          }
+        };
+        xhr.send();
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
