@@ -1,4 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import RoleC from './pages/c';
+import RoleD from './pages/d';
+import RoleAI from './pages/ai';
+import RoleM from './pages/m';
+import RoleA from './pages/a';
+import RoleU from './pages/u';
+import RoleQA from './pages/qa';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import { ArrowUpRight, ArrowRight, Github, Twitter, Linkedin, Dribbble, Star, GitFork, BookOpen, ExternalLink, Code2, Trophy, Award, Figma, TrendingUp, Palette, GraduationCap, Database, Landmark, Cloud, GitCommit, GitPullRequest } from 'lucide-react';
@@ -133,7 +140,7 @@ const useHlsVideo = (videoRef: React.RefObject<HTMLVideoElement>, src: string) =
 
 // --- COMPONENTS ---
 
-const LoadingScreen = ({ onComplete }: { onComplete: () => void }) => {
+export const LoadingScreen = ({ onComplete }: { onComplete: () => void }) => {
   const [count, setCount] = useState(0);
   const words = ["Design", "Create", "Inspire"];
   const [wordIndex, setWordIndex] = useState(0);
@@ -215,7 +222,7 @@ const LoadingScreen = ({ onComplete }: { onComplete: () => void }) => {
   );
 };
 
-const NavBar = () => {
+export const NavBar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [time, setTime] = useState({ ist: '', est: '' });
 
@@ -287,7 +294,7 @@ const NavBar = () => {
   );
 };
 
-const Hero = () => {
+export const Hero = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   useHlsVideo(videoRef, 'https://stream.mux.com/Aa02T7oM1wH5Mk5EEVDYhbZ1ChcdhRsS2m1NYyx4Ua1g.m3u8');
@@ -396,7 +403,7 @@ const Hero = () => {
 };
 
 // --- Tech Marquee Component ---
-const TechMarquee = () => {
+export const TechMarquee = () => {
   const techs1 = [
     { name: "CSS", icon: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-blue-500"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M10 12.5 8 15l2 2.5"></path><path d="m14 12.5 2 2.5-2 2.5"></path></svg> },
     { name: "Tailwind", icon: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-cyan-400"><path d="M12.8 19.6A2 2 0 1 0 14 16H2"></path><path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"></path><path d="M9.8 4.4A2 2 0 1 1 11 8H2"></path></svg> },
@@ -443,7 +450,7 @@ const TechMarquee = () => {
   );
 };
 
-const ContributionGraph = () => {
+export const ContributionGraph = () => {
   const [data, setData] = useState<any>(null);
   const [eventData, setEventData] = useState<Record<string, any[]>>({});
   const [tooltip, setTooltip] = useState<{ date: string; count: number; x: number; y: number; dayEvents: any[] } | null>(null);
@@ -728,7 +735,7 @@ const ContributionGraph = () => {
   );
 };
 
-const GithubProjects = () => {
+export const GithubProjects = () => {
   const [repos, setRepos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -857,7 +864,7 @@ const GithubProjects = () => {
   );
 };
 
-const CodeActivity = () => {
+export const CodeActivity = () => {
   return (
     <section className="bg-bg py-20 md:py-36 relative z-20">
       <div className="max-w-[1400px] mx-auto px-6 md:px-10 lg:px-16">
@@ -872,7 +879,7 @@ const CodeActivity = () => {
   );
 };
 
-const SelectedWorks = () => {
+export const SelectedWorks = () => {
   const projects = [
     { slug: "leadgs", title: "LeadGS Leaderboard", desc: "College Competitive Programming Leaderboard managing 100+ active users with weighted scoring algorithms.", live: "https://lb.sgsits.ac.in", github: "https://github.com/winshaurya/LeadGS", image: "https://s0.wp.com/mshots/v1/https://lb.sgsits.ac.in?w=1600", gradient: "from-violet-500 via-fuchsia-400/60 via-indigo-500/60" },
     { slug: "bitchess", title: "bit.Chess Platform", desc: "Real-Time Multiplayer Chess Platform with spectator support via WebSockets and Express.js.", live: "https://bit-chess.onrender.com/", github: "https://github.com/winshaurya/bit.chess", image: "https://s0.wp.com/mshots/v1/https://bit-chess.onrender.com?w=1600", gradient: "from-sky-500 via-blue-400/60" },
@@ -961,7 +968,7 @@ const SelectedWorks = () => {
   );
 };
 
-const BadgeImage = ({ src, alt, fallbackText, FallbackIcon, padding = "p-2" }: { src: string, alt: string, fallbackText: string, FallbackIcon: any, padding?: string }) => {
+export const BadgeImage = ({ src, alt, fallbackText, FallbackIcon, padding = "p-2" }: { src: string, alt: string, fallbackText: string, FallbackIcon: any, padding?: string }) => {
   const [error, setError] = useState(false);
   
   return error || !src ? (
@@ -975,7 +982,7 @@ const BadgeImage = ({ src, alt, fallbackText, FallbackIcon, padding = "p-2" }: {
   );
 };
 
-const Journal = () => {
+export const Journal = () => {
   const entries = [
     { title: "McKinsey Forward Program (ML Track)", org: "McKinsey & Company", logo: "https://logo.clearbit.com/mckinsey.com", icon: TrendingUp, readTime: "Machine Learning", date: "Sep 2025 - Present", url: "#" },
     { title: "Web Developer Intern", org: "IISPR", logo: "https://logo.clearbit.com/iispr.in", icon: Code2, readTime: "Web Dev", date: "Jul 2025 - Present", url: "#" },
@@ -1093,7 +1100,7 @@ const Journal = () => {
   );
 };
 
-const Explorations = () => {
+export const Explorations = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   
   const fallbackProjects = [
@@ -1224,7 +1231,7 @@ const Explorations = () => {
   );
 };
 
-const Stats = () => {
+export const Stats = () => {
   const [cfData, setCfData] = useState({ rating: '...', maxRating: '...', rank: 'Loading...' });
   const [lcData, setLcData] = useState({ solved: '...', rating: '1600' });
   const [ccData, setCcData] = useState({ rating: '...', stars: '...', rank: '...' });
@@ -1348,7 +1355,7 @@ const Stats = () => {
   );
 };
 
-const Footer = () => {
+export const Footer = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   useHlsVideo(videoRef, 'https://stream.mux.com/Aa02T7oM1wH5Mk5EEVDYhbZ1ChcdhRsS2m1NYyx4Ua1g.m3u8');
 
@@ -1475,7 +1482,14 @@ export default function App() {
           )} />
 
           {/* Role-specific routes reusing the same layout for now */}
-          <Route path="/:role" element={(
+          <Route path="/c" element={<RoleC />} />
+          <Route path="/d" element={<RoleD />} />
+          <Route path="/ai" element={<RoleAI />} />
+          <Route path="/m" element={<RoleM />} />
+          <Route path="/a" element={<RoleA />} />
+          <Route path="/u" element={<RoleU />} />
+          <Route path="/qa" element={<RoleQA />} />
+          <Route path=":/role" element={(
             <motion.div 
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }} 
