@@ -100,42 +100,83 @@ const globalStyles = `
   .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 `;
 
+export const GlobalStyles = () => <style>{globalStyles}</style>;
+
 // --- HOOKS ---
 
-// Hook to dynamically load and manage HLS video
-const useHlsVideo = (videoRef: React.RefObject<HTMLVideoElement>, src: string) => {
+// Hook to dynamically load and manage HLS video (supports optional local mp4 fallback)
+const useHlsVideo = (videoRef: React.RefObject<HTMLVideoElement>, srcOrOptions: string | { hls?: string; mp4?: string }) => {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
+    let aborted = false;
+    let hls: any = null;
+    const hlsSrc = typeof srcOrOptions === 'string' ? srcOrOptions : (srcOrOptions?.hls ?? '');
+    const mp4Src = typeof srcOrOptions === 'object' ? srcOrOptions?.mp4 : undefined;
+
     const loadVideo = async () => {
+      // Try local mp4 fallback first (if provided)
+      if (mp4Src) {
+        try {
+          const res = await fetch(mp4Src, { method: 'HEAD' });
+          if (res.ok && !aborted) {
+            video.src = mp4Src;
+            video.preload = 'auto';
+            return;
+          }
+        } catch (e) {
+          // ignore and fallback to HLS
+        }
+      }
+
+      // Fallback: HLS stream
       // @ts-ignore
-      if (window.Hls && window.Hls.isSupported()) {
+      if (window.Hls && window.Hls.isSupported && window.Hls.isSupported()) {
         // @ts-ignore
-        const hls = new window.Hls();
-        hls.loadSource(src);
+        hls = new window.Hls();
+        hls.loadSource(hlsSrc);
         hls.attachMedia(video);
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        video.src = src;
+        video.src = hlsSrc;
       } else {
-        // Dynamic load of hls.js script if not available
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
         script.async = true;
         script.onload = () => {
           // @ts-ignore
-          if (window.Hls.isSupported()) {
-             // @ts-ignore
-            const hls = new window.Hls();
-            hls.loadSource(src);
+          if (window.Hls && window.Hls.isSupported && window.Hls.isSupported()) {
+            // @ts-ignore
+            hls = new window.Hls();
+            hls.loadSource(hlsSrc);
             hls.attachMedia(video);
           }
         };
         document.body.appendChild(script);
       }
     };
+
+    const onTimeUpdate = () => {
+      try {
+        if (video.duration && video.currentTime >= Math.max(0, video.duration - 1)) {
+          video.currentTime = 0.05;
+          video.play().catch(() => {});
+        }
+      } catch (e) {}
+    };
+
+    video.addEventListener('timeupdate', onTimeUpdate);
+
     loadVideo();
-  }, [src, videoRef]);
+
+    return () => {
+      aborted = true;
+      video.removeEventListener('timeupdate', onTimeUpdate);
+      if (hls) {
+        try { hls.destroy(); } catch (e) {}
+      }
+    };
+  }, [videoRef, srcOrOptions]);
 };
 
 // --- COMPONENTS ---
@@ -294,20 +335,33 @@ export const NavBar = () => {
   );
 };
 
-export const Hero = () => {
+export const Hero = ({ subtitle = "Collection '26", roleLabels }: { subtitle?: string; roleLabels?: string[] }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  useHlsVideo(videoRef, 'https://stream.mux.com/Aa02T7oM1wH5Mk5EEVDYhbZ1ChcdhRsS2m1NYyx4Ua1g.m3u8');
+  useHlsVideo(videoRef, { hls: 'https://stream.mux.com/Aa02T7oM1wH5Mk5EEVDYhbZ1ChcdhRsS2m1NYyx4Ua1g.m3u8', mp4: '/videos/bg-hd.mp4' });
 
   const [roleIndex, setRoleIndex] = useState(0);
-  const roles = ["Developer", "ML Enthusiast", "Problem Solver", "Student"];
+  const roles = roleLabels && roleLabels.length > 0 ? roleLabels : ["Developer", "ML Enthusiast", "Problem Solver", "Student"];
 
   useEffect(() => {
     const interval = setInterval(() => {
       setRoleIndex((prev) => (prev + 1) % roles.length);
     }, 2000);
     return () => clearInterval(interval);
-  }, []);
+  }, [roles.length]);
+
+  const [isVideoReady, setIsVideoReady] = useState(false);
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onReady = () => setIsVideoReady(true);
+    v.addEventListener('canplaythrough', onReady);
+    v.addEventListener('playing', onReady);
+    return () => {
+      v.removeEventListener('canplaythrough', onReady);
+      v.removeEventListener('playing', onReady);
+    };
+  }, [videoRef]);
 
   return (
     <section id="home" ref={containerRef} className="relative w-full h-screen flex items-center justify-center overflow-hidden">
@@ -315,10 +369,10 @@ export const Hero = () => {
       <div className="absolute inset-0 z-0">
         <video 
           ref={videoRef}
-          autoPlay muted loop playsInline
+          autoPlay muted loop playsInline preload="auto"
           className="min-w-full min-h-full object-cover absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
         />
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+        <div className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity ${isVideoReady ? 'opacity-0' : 'opacity-100'}`} />
         <div className="absolute bottom-0 w-full h-48 bg-gradient-to-t from-bg to-transparent" />
       </div>
 
@@ -330,7 +384,7 @@ export const Hero = () => {
           transition={{ duration: 1, delay: 0.3, ease: 'easeOut' }}
           className="text-xs text-muted uppercase tracking-[0.3em] mb-6 md:mb-8 font-medium"
         >
-          Collection '26
+          {subtitle}
         </motion.div>
         
         <motion.h1 
@@ -696,39 +750,10 @@ export const ContributionGraph = () => {
                 <div
                   key={j}
                   className={`w-full aspect-square rounded-[2px] cursor-pointer hover:ring-1 hover:ring-white/50 transition-all ${getColorClass(day.contributionCount)}`}
-                  onMouseEnter={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setTooltip({ 
-                      date: day.date, 
-                      count: day.contributionCount, 
-                      x: rect.left + rect.width / 2, 
-                      y: rect.top,
-                      dayEvents: eventData[day.date] || []
-                    });
-                  }}
-                  onMouseLeave={() => setTooltip(null)}
                 />
               ))}
             </div>
           ))}
-        </div>
-      </div>
-
-      <div className="flex justify-between items-center mt-4 text-xs text-muted min-w-[900px]">
-        <div className="flex items-center gap-2">
-           <Github size={14} />
-           {data.totalContributions > 0 ? (
-             <span>{data.totalContributions.toLocaleString()} contributions in the last year</span>
-           ) : (
-             <span>Fetching real-time contribution data...</span>
-           )}
-        </div>
-        <div className="flex items-center gap-2">
-          <span>Less</span>
-          <div className="flex gap-[3px]">
-            {[0, 2, 5, 10, 15].map((c, i) => <div key={i} className={`w-[10px] h-[10px] rounded-[2px] ${getColorClass(c)}`} />)}
-          </div>
-          <span>More</span>
         </div>
       </div>
     </section>
@@ -1311,7 +1336,7 @@ export const Stats = () => {
   ];
 
   return (
-    <section className="bg-bg py-16 md:py-24 border-t border-stroke/50">
+    <section className="bg-bg py-8 md:py-24 border-t border-stroke/50">
       <div className="max-w-[1200px] mx-auto px-6 md:px-10 lg:px-16">
         
         <div className="flex items-center gap-4 mb-12">
@@ -1330,7 +1355,7 @@ export const Stats = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1, duration: 0.8 }}
-              className="group flex flex-col p-4 md:p-8 rounded-[2rem] bg-surface border border-stroke hover:border-white/20 transition-all duration-300 relative overflow-hidden"
+              className="group flex flex-col p-2 md:p-8 rounded-[2rem] bg-surface border border-stroke hover:border-white/20 transition-all duration-300 relative overflow-hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               <div className="relative z-10">
@@ -1338,11 +1363,11 @@ export const Stats = () => {
                   {stat.icon}
                   <ExternalLink size={18} className="text-muted opacity-0 group-hover:opacity-100 transition-all -translate-x-2 translate-y-2 group-hover:translate-x-0 group-hover:translate-y-0" />
                 </div>
-                <span className="text-xs font-medium text-muted mb-8 block uppercase tracking-widest">{stat.platform}</span>
-                <span className="text-4xl md:text-6xl font-medium tracking-tighter text-text-primary mb-6 block">
+                <span className="text-xs font-medium text-muted mb-4 md:mb-8 block uppercase tracking-widest">{stat.platform}</span>
+                <span className="text-2xl md:text-6xl font-medium tracking-tighter text-text-primary mb-4 md:mb-6 block">
                   {stat.number}
                 </span>
-                <div className="w-full h-px bg-stroke mb-6 group-hover:bg-white/10 transition-colors duration-300" />
+                <div className="w-full h-px bg-stroke mb-4 md:mb-6 group-hover:bg-white/10 transition-colors duration-300" />
                 <span className="text-lg md:text-xl font-medium text-text-primary mb-2 block">{stat.label}</span>
                 <span className="text-sm text-muted block capitalize">{stat.sub}</span>
               </div>
@@ -1357,7 +1382,19 @@ export const Stats = () => {
 
 export const Footer = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  useHlsVideo(videoRef, 'https://stream.mux.com/Aa02T7oM1wH5Mk5EEVDYhbZ1ChcdhRsS2m1NYyx4Ua1g.m3u8');
+  useHlsVideo(videoRef, { hls: 'https://stream.mux.com/Aa02T7oM1wH5Mk5EEVDYhbZ1ChcdhRsS2m1NYyx4Ua1g.m3u8', mp4: '/videos/bg-hd.mp4' });
+  const [isVideoReadyFooter, setIsVideoReadyFooter] = useState(false);
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onReady = () => setIsVideoReadyFooter(true);
+    v.addEventListener('canplaythrough', onReady);
+    v.addEventListener('playing', onReady);
+    return () => {
+      v.removeEventListener('canplaythrough', onReady);
+      v.removeEventListener('playing', onReady);
+    };
+  }, [videoRef]);
 
   return (
     <footer id="contact" className="bg-bg relative pt-20 md:pt-32 pb-8 md:pb-12 overflow-hidden border-t border-stroke/50">
@@ -1366,10 +1403,10 @@ export const Footer = () => {
       <div className="absolute inset-0 z-0 scale-y-[-1] opacity-60">
         <video 
           ref={videoRef}
-          autoPlay muted loop playsInline
+          autoPlay muted loop playsInline preload="auto"
           className="min-w-full min-h-full object-cover absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 grayscale"
         />
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-[1px]" />
+        <div className={`absolute inset-0 bg-black/70 backdrop-blur-[1px] transition-opacity ${isVideoReadyFooter ? 'opacity-0' : 'opacity-100'}`} />
       </div>
       
       <div className="absolute top-0 w-full h-32 bg-gradient-to-b from-bg to-transparent z-10" />

@@ -1,11 +1,12 @@
 import React from 'react';
-import { NavBar, Hero, TechMarquee, CodeActivity, SelectedWorks, Journal, Explorations, GithubProjects, Footer } from '../../App';
+import { NavBar, Hero, TechMarquee, CodeActivity, SelectedWorks, Journal, Explorations, GithubProjects, Footer, GlobalStyles } from '../../App';
 
 export default function DataEngPage() {
   return (
     <div className="bg-bg min-h-screen text-text-primary selection:bg-white/20">
+      <GlobalStyles />
       <NavBar />
-      <Hero />
+      <Hero subtitle="design think craft" roleLabels={["Data Engineer"]} />
       <TechMarquee />
       <CodeActivity />
       <Journal />
