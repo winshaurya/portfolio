@@ -338,7 +338,7 @@ export const NavBar = () => {
 export const Hero = ({ subtitle = "Collection '26", roleLabels }: { subtitle?: string; roleLabels?: string[] }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  useHlsVideo(videoRef, { hls: 'https://stream.mux.com/Aa02T7oM1wH5Mk5EEVDYhbZ1ChcdhRsS2m1NYyx4Ua1g.m3u8', mp4: '/videos/bg-hd.mp4' });
+  useHlsVideo(videoRef, { mp4: 'https://cdn.pixabay.com/video/2025/10/09/308800_large.mp4' });
 
   const [roleIndex, setRoleIndex] = useState(0);
   const roles = roleLabels && roleLabels.length > 0 ? roleLabels : ["Developer", "ML Enthusiast", "Problem Solver", "Student"];
@@ -367,12 +367,14 @@ export const Hero = ({ subtitle = "Collection '26", roleLabels }: { subtitle?: s
     <section id="home" ref={containerRef} className="relative w-full h-screen flex items-center justify-center overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 z-0">
-        <video 
+        <video
           ref={videoRef}
           autoPlay muted loop playsInline preload="auto"
           className="min-w-full min-h-full object-cover absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+          style={{ transform: 'rotate(180deg) scaleX(-1)' }}
+          src="https://cdn.pixabay.com/video/2025/10/09/308800_large.mp4"
         />
-        <div className={`absolute inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity ${isVideoReady ? 'opacity-0' : 'opacity-100'}`} />
+        {/* removed blur/backdrop overlay and background dimming per request */}
         <div className="absolute bottom-0 w-full h-48 bg-gradient-to-t from-bg to-transparent" />
       </div>
 
