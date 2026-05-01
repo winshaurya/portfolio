@@ -670,10 +670,10 @@ const ContributionGraph = () => {
   if (!data) return <div className="h-40 animate-pulse bg-surface rounded-lg"></div>;
 
   return (
-    <section className="mt-12 opacity-80 hover:opacity-100 transition-opacity duration-500 relative max-w-4xl mx-auto w-full overflow-x-auto pb-4 custom-scrollbar">
+    <section className="mt-12 opacity-80 hover:opacity-100 transition-opacity duration-500 relative max-w-[1400px] mx-auto w-full overflow-x-auto pb-4 custom-scrollbar">
       {renderTooltipContent()}
 
-      <div className="relative text-[10px] text-muted mb-2 h-4 w-full min-w-[700px]">
+      <div className="relative text-[10px] text-muted mb-2 h-4 w-full min-w-[900px]">
         {monthLabels.map((label, i) => (
           <span key={i} className="absolute" style={{ left: `${(label.weekIndex / filteredWeeks.length) * 100}%` }}>
             {label.month}
@@ -681,7 +681,7 @@ const ContributionGraph = () => {
         ))}
       </div>
 
-      <div className="w-full min-w-[700px]">
+      <div className="w-full min-w-[900px]">
         <div className="flex gap-[3px] w-full">
           {filteredWeeks.map((week: any, i: number) => (
             <div key={i} className="flex flex-col gap-[3px] flex-1">
@@ -707,7 +707,7 @@ const ContributionGraph = () => {
         </div>
       </div>
 
-      <div className="flex justify-between items-center mt-4 text-xs text-muted min-w-[700px]">
+      <div className="flex justify-between items-center mt-4 text-xs text-muted min-w-[900px]">
         <div className="flex items-center gap-2">
            <Github size={14} />
            {data.totalContributions > 0 ? (
@@ -859,14 +859,14 @@ const GithubProjects = () => {
 
 const CodeActivity = () => {
   return (
-    <section className="bg-bg py-16 md:py-24 relative z-20">
-      <div className="max-w-[1200px] mx-auto px-6 md:px-10 lg:px-16">
+    <section className="bg-bg py-20 md:py-36 relative z-20">
+      <div className="max-w-[1400px] mx-auto px-6 md:px-10 lg:px-16">
          <div className="flex items-center gap-4 mb-8">
             <div className="w-8 h-px bg-stroke" />
             <span className="text-xs text-muted uppercase tracking-[0.3em]">Code Activity</span>
           </div>
          <ContributionGraph />
-         <GithubProjects />
+         <Stats />
       </div>
     </section>
   );
@@ -924,7 +924,7 @@ const SelectedWorks = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-50px" }}
                 transition={{ duration: 0.8, delay: i * 0.1, ease: "easeOut" }}
-                className={`group relative bg-surface border border-stroke rounded-3xl overflow-hidden cursor-pointer aspect-[4/3] md:aspect-auto md:h-[480px] md:col-span-${colSpan}`}
+                className={`group relative bg-surface border border-stroke rounded-3xl overflow-hidden cursor-pointer aspect-[16/9] md:aspect-[4/3] md:h-[480px] md:col-span-${colSpan}`}
                 style={{ gridColumn: `span ${colSpan} / span ${colSpan}` }}
               >
                 {/* Image */}
@@ -978,7 +978,6 @@ const BadgeImage = ({ src, alt, fallbackText, FallbackIcon, padding = "p-2" }: {
 const Journal = () => {
   const entries = [
     { title: "McKinsey Forward Program (ML Track)", org: "McKinsey & Company", logo: "https://logo.clearbit.com/mckinsey.com", icon: TrendingUp, readTime: "Machine Learning", date: "Sep 2025 - Present", url: "#" },
-    { title: "AI & Full Stack Engineer Intern", org: "DSSE, IIT Bombay", logo: "https://logo.clearbit.com/iitb.ac.in", icon: Database, readTime: "AI & Full Stack", date: "Jun 2025 - Jul 2025", url: "#" },
     { title: "Web Developer Intern", org: "IISPR", logo: "https://logo.clearbit.com/iispr.in", icon: Code2, readTime: "Web Dev", date: "Jul 2025 - Present", url: "#" },
     { title: "B.Tech CSE", org: "SGSITS, Indore", logo: "https://logo.clearbit.com/sgsits.ac.in", icon: GraduationCap, readTime: "Education", date: "2023 - 2027", url: "https://www.sgsits.ac.in/" },
   ];
@@ -1313,7 +1312,7 @@ const Stats = () => {
           <span className="text-xs text-muted uppercase tracking-[0.3em]">Competitive Programming</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-8">
           {stats.map((stat, i) => (
             <motion.a 
               href={stat.link}
@@ -1324,7 +1323,7 @@ const Stats = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: i * 0.1, duration: 0.8 }}
-              className="group flex flex-col p-8 rounded-[2rem] bg-surface border border-stroke hover:border-white/20 transition-all duration-300 relative overflow-hidden"
+              className="group flex flex-col p-4 md:p-8 rounded-[2rem] bg-surface border border-stroke hover:border-white/20 transition-all duration-300 relative overflow-hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               <div className="relative z-10">
@@ -1333,7 +1332,7 @@ const Stats = () => {
                   <ExternalLink size={18} className="text-muted opacity-0 group-hover:opacity-100 transition-all -translate-x-2 translate-y-2 group-hover:translate-x-0 group-hover:translate-y-0" />
                 </div>
                 <span className="text-xs font-medium text-muted mb-8 block uppercase tracking-widest">{stat.platform}</span>
-                <span className="text-6xl md:text-7xl font-medium tracking-tighter text-text-primary mb-6 block">
+                <span className="text-4xl md:text-6xl font-medium tracking-tighter text-text-primary mb-6 block">
                   {stat.number}
                 </span>
                 <div className="w-full h-px bg-stroke mb-6 group-hover:bg-white/10 transition-colors duration-300" />
@@ -1467,10 +1466,10 @@ export default function App() {
               <Hero />
               <TechMarquee />
               <CodeActivity />
-              <SelectedWorks />
               <Journal />
+              <SelectedWorks />
               <Explorations />
-              <Stats />
+              <GithubProjects />
               <Footer />
             </motion.div>
           )} />
@@ -1499,10 +1498,10 @@ export default function App() {
               <Hero />
               <TechMarquee />
               <CodeActivity />
-              <SelectedWorks />
               <Journal />
+              <SelectedWorks />
               <Explorations />
-              <Stats />
+              <GithubProjects />
               <Footer />
             </motion.div>
           )} />
