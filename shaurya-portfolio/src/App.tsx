@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import { ArrowUpRight, ArrowRight, Github, Twitter, Linkedin, Dribbble, Star, GitFork, BookOpen, ExternalLink, Code2, Trophy, Award, Figma, TrendingUp, Palette, GraduationCap, Database, Landmark, Cloud, GitCommit, GitPullRequest } from 'lucide-react';
 
@@ -1430,6 +1431,20 @@ const Footer = () => {
 // --- MAIN APP ---
 export default function App() {
   const [loading, setLoading] = useState(true);
+  const location = useLocation();
+
+  // Map route to friendly role name
+  const roleMap: Record<string, string> = {
+    '/c': 'Cloud Architect',
+    '/d': 'Data Engineer',
+    '/ai': 'AI Fullstack Engineer',
+    '/m': 'Java Microservices Engineer',
+    '/a': 'Application Developer',
+    '/u': 'UI/UX Engineer',
+    '/qa': 'QA Automation Engineer',
+  };
+
+  const currentRole = roleMap[location.pathname] || '';
 
   return (
     <>
@@ -1440,22 +1455,58 @@ export default function App() {
       </AnimatePresence>
 
       {!loading && (
-        <motion.div 
-          initial={{ opacity: 0 }} 
-          animate={{ opacity: 1 }} 
-          transition={{ duration: 1 }}
-          className="bg-bg min-h-screen text-text-primary selection:bg-white/20"
-        >
-          <NavBar />
-          <Hero />
-          <TechMarquee />
-          <CodeActivity />
-          <SelectedWorks />
-          <Journal />
-          <Explorations />
-          <Stats />
-          <Footer />
-        </motion.div>
+        <Routes>
+          <Route path="/" element={(
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              transition={{ duration: 1 }}
+              className="bg-bg min-h-screen text-text-primary selection:bg-white/20"
+            >
+              <NavBar />
+              <Hero />
+              <TechMarquee />
+              <CodeActivity />
+              <SelectedWorks />
+              <Journal />
+              <Explorations />
+              <Stats />
+              <Footer />
+            </motion.div>
+          )} />
+
+          {/* Role-specific routes reusing the same layout for now */}
+          <Route path="/:role" element={(
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              transition={{ duration: 1 }}
+              className="bg-bg min-h-screen text-text-primary selection:bg-white/20"
+            >
+              <NavBar />
+              {/* Role banner */}
+              {currentRole && (
+                <div className="max-w-6xl mx-auto px-6 mt-20 mb-6">
+                  <div className="rounded-xl p-4 bg-surface/60 border border-stroke flex items-center gap-4">
+                    <div className="w-2 h-8 bg-blue-400 rounded" />
+                    <div>
+                      <div className="text-sm text-muted">Viewing as</div>
+                      <div className="text-2xl font-medium">{currentRole}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <Hero />
+              <TechMarquee />
+              <CodeActivity />
+              <SelectedWorks />
+              <Journal />
+              <Explorations />
+              <Stats />
+              <Footer />
+            </motion.div>
+          )} />
+        </Routes>
       )}
     </>
   );
